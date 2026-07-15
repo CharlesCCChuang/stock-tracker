@@ -71,6 +71,9 @@
   .rename:hover { color: var(--accent); }
   td.sym a { color: var(--text); font-weight: 700; text-decoration: none; }
   td.sym a:hover { color: var(--accent); text-decoration: underline; }
+  .star { cursor: pointer; margin-right: 7px; color: var(--accent); font-size: 15px;
+          user-select: none; }
+  .star:hover { color: var(--deep); }
   .wtag { display: inline-block; width: 17px; height: 17px; line-height: 15px;
           border: 1px solid var(--border); border-radius: 50%;
           color: var(--muted); font-size: 10.5px; text-align: center;
@@ -196,12 +199,15 @@ function fmtDays(d) {
   return d.days + ' 天';
 }
 
-function rowHtml(sym, tag) {
+function rowHtml(sym, tag, listCtx) {
   const d = DB.data[sym];
   const tagHtml = tag ? `<span class="sub">${tag}</span>` : '';
-  const tags = ['1', '2'].map(l =>
-    `<span class="wtag${inList(l, sym) ? ' on' : ''}" title="${inList(l, sym) ? '移出' : '加入'}自選名單 ${l}" onclick="toggleList('${l}','${sym}')">${l}</span>`
-  ).join('');
+  // 名單檢視：顯示星星（點了從該名單移除）；全部股票檢視：顯示 ①② 數字圓鈕
+  const tags = listCtx
+    ? `<span class="star" title="移出${WLS.names[listCtx]}" onclick="toggleList('${listCtx}','${sym}')">★</span>`
+    : ['1', '2'].map(l =>
+        `<span class="wtag${inList(l, sym) ? ' on' : ''}" title="${inList(l, sym) ? '移出' : '加入'}${WLS.names[l]}" onclick="toggleList('${l}','${sym}')">${l}</span>`
+      ).join('');
   if (!d) return `<tr><td class="sym">${tags}${sym}${tagHtml}</td><td colspan="7" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
   return `<tr>
     <td class="sym">${tags}<a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a>${tagHtml}</td>
@@ -249,7 +255,7 @@ function htmlList(l) {
       const members = s.tickers.filter(sym => inList(l, sym));
       if (!members.length) continue;
       let block = `<tr class="subhead"><td colspan="8">${s.name}</td></tr>`;
-      for (const sym of sortByCur(members)) block += rowHtml(sym);
+      for (const sym of sortByCur(members)) block += rowHtml(sym, null, l);
       subBlocks.push(block);
     }
     if (!subBlocks.length) continue;
