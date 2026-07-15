@@ -112,7 +112,7 @@ function tvLink(sym) { return 'https://tw.tradingview.com/chart/?symbol=' + enco
 function rowHtml(sym, tag) {
   const d = DB.data[sym];
   const tagHtml = tag ? `<span class="sub">${tag}</span>` : '';
-  if (!d) return `<tr><td class="sym">${sym}${tagHtml}</td><td colspan="6" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
+  if (!d) return `<tr><td class="sym">${sym}${tagHtml}</td><td colspan="7" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
   return `<tr>
     <td class="sym"><a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a>${tagHtml}</td>
     <td>${d.price.toFixed(2)}</td>
@@ -121,11 +121,18 @@ function rowHtml(sym, tag) {
     <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
     <td>${d.peak.toFixed(2)}<span class="sub">${d.peak_date}</span></td>
     <td>${d.low.toFixed(2)}<span class="sub">${d.low_date}</span></td>
+    <td>${ddDays(d)} 天</td>
   </tr>`;
 }
 
+function ddDays(d) {
+  // 波段高點當天算第 1 天，數到最新資料日
+  const ms = new Date(d.date) - new Date(d.peak_date);
+  return Math.round(ms / 86400000) + 1;
+}
+
 const THEAD = `<thead><tr>
-  <th>代號</th><th>收盤價</th><th>今日漲跌</th><th>目前回檔</th><th>最大跌幅</th><th>波段高點</th><th>波段低點</th>
+  <th>代號</th><th>收盤價</th><th>今日漲跌</th><th>目前回檔</th><th>最大跌幅</th><th>波段高點</th><th>波段低點</th><th>回檔天數</th>
 </tr></thead>`;
 
 function sortByCur(tickers) {
@@ -143,7 +150,7 @@ function render() {
   for (const g of DB.groups) {
     let body = '';
     for (const s of g.subs) {
-      body += `<tr class="subhead"><td colspan="7">${s.name}</td></tr>`;
+      body += `<tr class="subhead"><td colspan="8">${s.name}</td></tr>`;
       for (const sym of sortByCur(s.tickers)) body += rowHtml(sym);
     }
     html += `<div class="card"><h2>${g.name}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
