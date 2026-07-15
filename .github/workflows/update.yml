@@ -1,0 +1,35 @@
+name: Update stock data
+
+on:
+  schedule:
+    # 台北時間週二~週六 05:30（UTC 21:30，涵蓋美股週一~週五收盤後）
+    - cron: "30 21 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch prices and compute drawdowns
+        run: python tracker.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "Update data $(date -u +%Y-%m-%d)"
+            git push
+          fi
