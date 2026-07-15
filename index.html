@@ -64,6 +64,11 @@
                   padding: 5px 12px; }
   td.sym a { color: var(--text); font-weight: 700; text-decoration: none; }
   td.sym a:hover { color: var(--accent); text-decoration: underline; }
+  .star { cursor: pointer; margin-right: 7px; color: var(--border); font-size: 15px;
+          user-select: none; transition: color .15s; }
+  .star:hover { color: var(--accent); }
+  .star.on { color: var(--accent); }
+  .watchhint { padding: 14px; color: var(--muted); font-size: 13.5px; }
   td .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
   .p0 { color: var(--ok); }
   .p1 { color: var(--mild); }
@@ -87,6 +92,7 @@
   <div class="subtitle">US STOCK DRAWDOWN TRACKER</div>
   <div class="meta" id="meta">載入中…</div>
   <div class="failed" id="failed" hidden></div>
+  <div id="watch"></div>
   <div id="content"></div>
   <div class="note">
     「最大跌幅」＝本段連續下跌中，段內高點到段內最低點（影線）的跌幅；「目前回檔」＝最新收盤價相對段內高點的跌幅。
@@ -95,6 +101,40 @@
 </div>
 <script>
 let DB = null;
+
+// 自選股：存在瀏覽器 localStorage
+const WL = new Set(JSON.parse(localStorage.getItem('watchlist') || '[]'));
+
+function toggleWatch(sym) {
+  WL.has(sym) ? WL.delete(sym) : WL.add(sym);
+  localStorage.setItem('watchlist', JSON.stringify([...WL]));
+  renderWatch();
+  render();
+}
+
+function renderWatch() {
+  const el = document.getElementById('watch');
+  let body = '';
+  for (const g of DB.groups) {
+    const items = [];
+    for (const s of g.subs) for (const sym of s.tickers) {
+      if (WL.has(sym)) items.push([sym, s.name]);
+    }
+    if (!items.length) continue;
+    items.sort((a, b) => {
+      const da = DB.data[a[0]], db_ = DB.data[b[0]];
+      if (!da) return 1;
+      if (!db_) return -1;
+      return da.cur - db_.cur;
+    });
+    body += `<tr class="subhead"><td colspan="8">${g.name}</td></tr>`;
+    for (const [sym, tag] of items) body += rowHtml(sym, tag);
+  }
+  const inner = body
+    ? `<div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div>`
+    : `<div class="watchhint">還沒有自選股——點任一股票代號前面的 ☆ 加入，再點一次 ★ 移除。</div>`;
+  el.innerHTML = `<div class="card"><h2>⭐ 自選股</h2>${inner}</div>`;
+}
 
 function pctClass(v) {
   if (v === null || v === undefined) return 'p0';
@@ -112,9 +152,11 @@ function tvLink(sym) { return 'https://tw.tradingview.com/chart/?symbol=' + enco
 function rowHtml(sym, tag) {
   const d = DB.data[sym];
   const tagHtml = tag ? `<span class="sub">${tag}</span>` : '';
-  if (!d) return `<tr><td class="sym">${sym}${tagHtml}</td><td colspan="7" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
+  const on = WL.has(sym);
+  const star = `<span class="star${on ? ' on' : ''}" title="${on ? '移出自選股' : '加入自選股'}" onclick="toggleWatch('${sym}')">${on ? '★' : '☆'}</span>`;
+  if (!d) return `<tr><td class="sym">${star}${sym}${tagHtml}</td><td colspan="7" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
   return `<tr>
-    <td class="sym"><a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a>${tagHtml}</td>
+    <td class="sym">${star}<a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a>${tagHtml}</td>
     <td>${d.price.toFixed(2)}</td>
     <td class="${chgClass(d.chg)}">${fmtChg(d.chg)}</td>
     <td class="${pctClass(d.cur)}">${fmtPct(d.cur)}</td>
@@ -185,6 +227,7 @@ fetch('data.json?t=' + Date.now())
       f.textContent = '⚠ 以下標的本次抓取失敗：' + db.failed.join(', ');
     }
     renderIndex();
+    renderWatch();
     render();
   })
   .catch(e => { document.getElementById('meta').textContent = '載入 data.json 失敗：' + e; });
