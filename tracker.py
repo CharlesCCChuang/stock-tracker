@@ -7,12 +7,11 @@
 - 反彈成立後該段結束歸零，之後以反彈後的新高點重新起算下一段。
 - 高低點皆用影線（盤中極值），目前回檔用最新收盤價計算。
 """
-import csv
-import io
 import json
 import time
+import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 GROUPS = [
     {"name": "1. 半導體", "subs": [
@@ -62,33 +61,39 @@ GROUPS = [
     ]},
 ]
 
-LOOKBACK_DAYS = 730  # 抓兩年日線
-
-
 def fetch_daily(symbol: str):
     """從 Yahoo Finance 抓兩年日線 OHLC，回傳 [{date, high, low, close}, ...] 由舊到新。
 
     盤中進行中的 K 棒欄位可能是 None，直接略過。
     """
-    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-           f"?range=2y&interval=1d")
+    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/"
+           f"{urllib.parse.quote(symbol)}?range=2y&interval=1d")
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.load(resp)
     r = data["chart"]["result"][0]
     ts = r["timestamp"]
     q = r["indicators"]["quote"][0]
+
+    # Yahoo 有時最後一根（最新交易日）的 close 是 None，
+    # 但 meta.regularMarketPrice 已是正式收盤價 → 用它補上
+    meta = r.get("meta", {})
+    meta_price = meta.get("regularMarketPrice")
+    meta_date = None
+    if meta.get("regularMarketTime"):
+        meta_date = datetime.fromtimestamp(
+            meta["regularMarketTime"], timezone.utc).strftime("%Y-%m-%d")
+
     bars = []
     for i in range(len(ts)):
         h, lo, c = q["high"][i], q["low"][i], q["close"][i]
+        date = datetime.fromtimestamp(ts[i], timezone.utc).strftime("%Y-%m-%d")
+        if c is None and h is not None and lo is not None \
+                and meta_price is not None and date == meta_date:
+            c = meta_price
         if h is None or lo is None or c is None:
             continue
-        bars.append({
-            "date": datetime.fromtimestamp(ts[i], timezone.utc).strftime("%Y-%m-%d"),
-            "high": h,
-            "low": lo,
-            "close": c,
-        })
+        bars.append({"date": date, "high": h, "low": lo, "close": c})
     return bars
 
 
@@ -156,8 +161,26 @@ def main():
                     time.sleep(2)
         time.sleep(0.4)
 
+    # 那斯達克綜合指數（頁面左上角固定顯示）
+    index_info = None
+    try:
+        bars = fetch_daily("^IXIC")
+        last, prev = bars[-1], bars[-2]
+        index_info = {
+            "symbol": "IXIC",
+            "price": round(last["close"], 2),
+            "date": last["date"],
+            "chg_pts": round(last["close"] - prev["close"], 2),
+            "chg": round((last["close"] - prev["close"]) / prev["close"] * 100.0, 2),
+        }
+        print(f"IXIC: {index_info['price']} "
+              f"{index_info['chg_pts']:+} ({index_info['chg']:+}%)")
+    except Exception as e:
+        print(f"IXIC: FAILED ({e})")
+
     out = {
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "index": index_info,
         "groups": GROUPS,
         "data": result,
         "failed": failed,
