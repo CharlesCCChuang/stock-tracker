@@ -41,12 +41,15 @@
               margin: 2px 0 10px; font-family: Georgia, serif; }
   .meta { color: var(--muted); font-size: 13px; margin-bottom: 14px;
           padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+             margin-bottom: 14px; }
   .toolbar button {
-    padding: 6px 14px; border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 16px; border: 1px solid var(--border); border-radius: 999px;
     background: var(--card); color: var(--text); cursor: pointer; font-size: 14px;
   }
   .toolbar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .toolbar .sync { margin-left: auto; }
+  .syncstatus { color: var(--muted); font-size: 12px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
           margin-bottom: 16px; overflow: hidden;
           box-shadow: 0 1px 4px rgba(90, 70, 30, .06); }
@@ -64,11 +67,12 @@
                   padding: 5px 12px; }
   td.sym a { color: var(--text); font-weight: 700; text-decoration: none; }
   td.sym a:hover { color: var(--accent); text-decoration: underline; }
-  .star { cursor: pointer; margin-right: 7px; color: var(--border); font-size: 15px;
-          user-select: none; transition: color .15s; }
-  .star:hover { color: var(--accent); }
-  .star.on { color: var(--accent); }
-  .watchhint { padding: 14px; color: var(--muted); font-size: 13.5px; }
+  .wtag { display: inline-block; width: 17px; height: 17px; line-height: 15px;
+          border: 1px solid var(--border); border-radius: 50%;
+          color: var(--muted); font-size: 10.5px; text-align: center;
+          margin-right: 4px; cursor: pointer; user-select: none; vertical-align: 1px; }
+  .wtag:hover { border-color: var(--accent); color: var(--accent); }
+  .wtag.on { background: var(--accent); border-color: var(--accent); color: #fff; }
   td .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
   .p0 { color: var(--ok); }
   .p1 { color: var(--mild); }
@@ -78,6 +82,7 @@
   .down { color: var(--loss); }
   .note { color: var(--muted); font-size: 12.5px; margin: 10px 2px 30px; }
   .failed { color: var(--deep); font-size: 13px; margin-bottom: 12px; }
+  .hint { padding: 14px; color: var(--muted); font-size: 13.5px; }
 </style>
 </head>
 <body>
@@ -92,33 +97,136 @@
   <div class="subtitle">US STOCK DRAWDOWN TRACKER</div>
   <div class="meta" id="meta">載入中…</div>
   <div class="failed" id="failed" hidden></div>
-  <div id="watch"></div>
+  <div class="toolbar">
+    <button id="btnAll" onclick="setView('all')">全部股票</button>
+    <button id="btn1" onclick="setView('1')">自選名單 1</button>
+    <button id="btn2" onclick="setView('2')">自選名單 2</button>
+    <button class="sync" onclick="setupSync()">☁ 同步設定</button>
+    <span class="syncstatus" id="syncstatus"></span>
+  </div>
   <div id="content"></div>
   <div class="note">
-    「最大跌幅」＝本段連續下跌中，段內高點到段內最低點（影線）的跌幅；「目前回檔」＝最新收盤價相對段內高點的跌幅。
-    反彈超過（高點＋低點）÷2 即視為該段結束並重新起算。資料來源：Yahoo Finance 日線（還原股價），每個交易日盤後自動更新。
+    「最大跌幅」＝本段連續下跌中，段內高點到段內最低點（影線）的跌幅；「目前回檔」＝最新收盤價相對段內高點的跌幅；
+    「回檔天數」＝從波段高點起算的交易日數（高點當天為第 1 天）。
+    反彈超過（高點＋低點）÷2 即視為該段結束並重新起算。點代號前的 ①② 可加入自選名單。
+    資料來源：Yahoo Finance 日線（還原股價），每個交易日盤後自動更新。
   </div>
 </div>
 <script>
 let DB = null;
 
-// 自選股：存在瀏覽器 localStorage
-const WL = new Set(JSON.parse(localStorage.getItem('watchlist') || '[]'));
+/* ---------- 自選名單（兩份，localStorage＋可選 Gist 雲端同步） ---------- */
+const LS_KEY = 'watchlists_v2';
 
-function toggleWatch(sym) {
-  WL.has(sym) ? WL.delete(sym) : WL.add(sym);
-  localStorage.setItem('watchlist', JSON.stringify([...WL]));
-  renderWatch();
+function loadWL() {
+  try {
+    const o = JSON.parse(localStorage.getItem(LS_KEY));
+    if (o && o.lists) return o;
+  } catch (e) {}
+  // 從舊版單一自選股遷移
+  let old = [];
+  try { old = JSON.parse(localStorage.getItem('watchlist') || '[]'); } catch (e) {}
+  return {
+    lists: { "1": old, "2": [] },
+    updated: old.length ? new Date().toISOString() : '1970-01-01T00:00:00Z',
+  };
+}
+let WLS = loadWL();
+
+function saveWL() {
+  WLS.updated = new Date().toISOString();
+  localStorage.setItem(LS_KEY, JSON.stringify(WLS));
+  syncPush();
+}
+
+function inList(l, sym) { return WLS.lists[l].indexOf(sym) >= 0; }
+
+function toggleList(l, sym) {
+  const arr = WLS.lists[l];
+  const i = arr.indexOf(sym);
+  if (i >= 0) arr.splice(i, 1); else arr.push(sym);
+  saveWL();
   render();
 }
 
-function renderWatch() {
-  const el = document.getElementById('watch');
+/* ---------- 檢視切換 ---------- */
+let VIEW = localStorage.getItem('view') || 'all';
+function setView(v) {
+  VIEW = v;
+  localStorage.setItem('view', v);
+  render();
+}
+
+/* ---------- 顯示 ---------- */
+function pctClass(v) {
+  if (v === null || v === undefined) return 'p0';
+  const a = Math.abs(v);
+  if (a < 15) return 'p0';
+  if (a < 30) return 'p1';
+  if (a < 40) return 'p2';
+  return 'p3';
+}
+function fmtPct(v) { return (v === 0 ? '0%' : v.toFixed(2) + '%'); }
+function fmtChg(v) { return (v > 0 ? '+' : '') + v.toFixed(2) + '%'; }
+function chgClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'p0'); }
+function tvLink(sym) { return 'https://tw.tradingview.com/chart/?symbol=' + encodeURIComponent(sym); }
+function fmtDays(d) {
+  // 回檔第 1 天且回檔幅度小於 10% → 視為尚未形成回檔，顯示橫線
+  if (d.days === 1 && Math.abs(d.cur) < 10) return '－';
+  return d.days + ' 天';
+}
+
+function rowHtml(sym, tag) {
+  const d = DB.data[sym];
+  const tagHtml = tag ? `<span class="sub">${tag}</span>` : '';
+  const tags = ['1', '2'].map(l =>
+    `<span class="wtag${inList(l, sym) ? ' on' : ''}" title="${inList(l, sym) ? '移出' : '加入'}自選名單 ${l}" onclick="toggleList('${l}','${sym}')">${l}</span>`
+  ).join('');
+  if (!d) return `<tr><td class="sym">${tags}${sym}${tagHtml}</td><td colspan="7" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
+  return `<tr>
+    <td class="sym">${tags}<a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a>${tagHtml}</td>
+    <td>${d.price.toFixed(2)}</td>
+    <td class="${chgClass(d.chg)}">${fmtChg(d.chg)}</td>
+    <td class="${pctClass(d.cur)}">${fmtPct(d.cur)}</td>
+    <td>${fmtDays(d)}</td>
+    <td>${d.peak.toFixed(2)}<span class="sub">${d.peak_date}</span></td>
+    <td>${d.low.toFixed(2)}<span class="sub">${d.low_date}</span></td>
+    <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
+  </tr>`;
+}
+
+const THEAD = `<thead><tr>
+  <th>代號</th><th>收盤價</th><th>今日漲跌</th><th>目前回檔</th><th>回檔天數</th><th>波段高點</th><th>波段低點</th><th>最大跌幅</th>
+</tr></thead>`;
+
+function sortByCur(tickers) {
+  return [...tickers].sort((a, b) => {
+    const da = DB.data[a], db_ = DB.data[b];
+    if (!da) return 1;
+    if (!db_) return -1;
+    return da.cur - db_.cur;
+  });
+}
+
+function htmlAll() {
+  let html = '';
+  for (const g of DB.groups) {
+    let body = '';
+    for (const s of g.subs) {
+      body += `<tr class="subhead"><td colspan="8">${s.name}</td></tr>`;
+      for (const sym of sortByCur(s.tickers)) body += rowHtml(sym);
+    }
+    html += `<div class="card"><h2>${g.name}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
+  }
+  return html;
+}
+
+function htmlList(l) {
   let body = '';
   for (const g of DB.groups) {
     const items = [];
     for (const s of g.subs) for (const sym of s.tickers) {
-      if (WL.has(sym)) items.push([sym, s.name]);
+      if (inList(l, sym)) items.push([sym, s.name]);
     }
     if (!items.length) continue;
     items.sort((a, b) => {
@@ -132,79 +240,22 @@ function renderWatch() {
   }
   const inner = body
     ? `<div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div>`
-    : `<div class="watchhint">還沒有自選股——點任一股票代號前面的 ☆ 加入，再點一次 ★ 移除。</div>`;
-  el.innerHTML = `<div class="card"><h2>⭐ 自選股</h2>${inner}</div>`;
-}
-
-function pctClass(v) {
-  if (v === null || v === undefined) return 'p0';
-  const a = Math.abs(v);
-  if (a < 15) return 'p0';
-  if (a < 30) return 'p1';
-  if (a < 40) return 'p2';
-  return 'p3';
-}
-function fmtPct(v) { return (v === 0 ? '0%' : v.toFixed(2) + '%'); }
-function fmtChg(v) { return (v > 0 ? '+' : '') + v.toFixed(2) + '%'; }
-function chgClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'p0'); }
-function tvLink(sym) { return 'https://tw.tradingview.com/chart/?symbol=' + encodeURIComponent(sym); }
-
-function rowHtml(sym, tag) {
-  const d = DB.data[sym];
-  const tagHtml = tag ? `<span class="sub">${tag}</span>` : '';
-  const on = WL.has(sym);
-  const star = `<span class="star${on ? ' on' : ''}" title="${on ? '移出自選股' : '加入自選股'}" onclick="toggleWatch('${sym}')">${on ? '★' : '☆'}</span>`;
-  if (!d) return `<tr><td class="sym">${star}${sym}${tagHtml}</td><td colspan="7" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
-  return `<tr>
-    <td class="sym">${star}<a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a>${tagHtml}</td>
-    <td>${d.price.toFixed(2)}</td>
-    <td class="${chgClass(d.chg)}">${fmtChg(d.chg)}</td>
-    <td class="${pctClass(d.cur)}">${fmtPct(d.cur)}</td>
-    <td>${fmtDays(d)}</td>
-    <td>${d.peak.toFixed(2)}<span class="sub">${d.peak_date}</span></td>
-    <td>${d.low.toFixed(2)}<span class="sub">${d.low_date}</span></td>
-    <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
-  </tr>`;
-}
-
-function fmtDays(d) {
-  // 回檔第 1 天且回檔幅度小於 10% → 視為尚未形成回檔，顯示橫線
-  if (d.days === 1 && Math.abs(d.cur) < 10) return '－';
-  return d.days + ' 天';
-}
-
-const THEAD = `<thead><tr>
-  <th>代號</th><th>收盤價</th><th>今日漲跌</th><th>目前回檔</th><th>回檔天數</th><th>波段高點</th><th>波段低點</th><th>最大跌幅</th>
-</tr></thead>`;
-
-function sortByCur(tickers) {
-  // 子分類內依「目前回檔」由深至淺排序
-  return [...tickers].sort((a, b) => {
-    const da = DB.data[a], db_ = DB.data[b];
-    if (!da) return 1;
-    if (!db_) return -1;
-    return da.cur - db_.cur;
-  });
+    : `<div class="hint">此名單還沒有股票——切到「全部股票」，點代號前的 ${l === '1' ? '①' : '②'} 圓鈕加入。</div>`;
+  return `<div class="card"><h2>⭐ 自選名單 ${l}</h2>${inner}</div>`;
 }
 
 function render() {
-  let html = '';
-  for (const g of DB.groups) {
-    let body = '';
-    for (const s of g.subs) {
-      body += `<tr class="subhead"><td colspan="8">${s.name}</td></tr>`;
-      for (const sym of sortByCur(s.tickers)) body += rowHtml(sym);
-    }
-    html += `<div class="card"><h2>${g.name}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
+  for (const [id, v] of [['btnAll', 'all'], ['btn1', '1'], ['btn2', '2']]) {
+    document.getElementById(id).classList.toggle('active', VIEW === v);
   }
-  document.getElementById('content').innerHTML = html;
+  const content = document.getElementById('content');
+  content.innerHTML = (VIEW === 'all') ? htmlAll() : htmlList(VIEW);
 }
 
 function renderIndex() {
   const ix = DB.index;
   if (!ix) return;
-  const bar = document.getElementById('ixicbar');
-  bar.hidden = false;
+  document.getElementById('ixicbar').hidden = false;
   document.getElementById('idxPrice').textContent = ix.price.toLocaleString('en-US');
   const chgEl = document.getElementById('idxChg');
   chgEl.textContent = `${ix.chg_pts > 0 ? '+' : ''}${ix.chg_pts.toLocaleString('en-US')} (${ix.chg > 0 ? '+' : ''}${ix.chg.toFixed(2)}%)`;
@@ -212,6 +263,98 @@ function renderIndex() {
   document.getElementById('idxDate').textContent = ix.date;
 }
 
+/* ---------- 跨裝置同步（GitHub 私密 Gist） ---------- */
+const TOK_KEY = 'gh_gist_token', GIST_KEY = 'gh_gist_id';
+const GIST_DESC = 'stock-tracker-watchlists';
+
+function ghHeaders() {
+  return {
+    'Authorization': 'Bearer ' + localStorage.getItem(TOK_KEY),
+    'Accept': 'application/vnd.github+json',
+    'Content-Type': 'application/json',
+  };
+}
+function setSyncStatus(t) { document.getElementById('syncstatus').textContent = t; }
+
+async function syncInit() {
+  if (!localStorage.getItem(TOK_KEY)) { setSyncStatus('未設定同步（僅存於本機）'); return; }
+  setSyncStatus('同步中…');
+  try {
+    let id = localStorage.getItem(GIST_KEY);
+    if (id) {
+      const r = await fetch('https://api.github.com/gists/' + id, { headers: ghHeaders() });
+      if (r.status === 404) { localStorage.removeItem(GIST_KEY); id = null; }
+    }
+    if (!id) {
+      const gists = await (await fetch('https://api.github.com/gists?per_page=100', { headers: ghHeaders() })).json();
+      const g = Array.isArray(gists) ? gists.find(x => x.description === GIST_DESC) : null;
+      if (g) { id = g.id; }
+      else {
+        const r = await fetch('https://api.github.com/gists', {
+          method: 'POST', headers: ghHeaders(),
+          body: JSON.stringify({ description: GIST_DESC, public: false,
+            files: { 'watchlists.json': { content: JSON.stringify(WLS) } } }),
+        });
+        if (!r.ok) throw new Error('create gist HTTP ' + r.status);
+        id = (await r.json()).id;
+      }
+      localStorage.setItem(GIST_KEY, id);
+    }
+    const r = await fetch('https://api.github.com/gists/' + id, { headers: ghHeaders() });
+    if (!r.ok) throw new Error('read gist HTTP ' + r.status);
+    const file = (await r.json()).files['watchlists.json'];
+    const remote = file ? JSON.parse(file.content) : null;
+    if (remote && remote.updated > WLS.updated) {
+      WLS = remote;
+      localStorage.setItem(LS_KEY, JSON.stringify(WLS));
+      if (DB) render();
+    } else if (!remote || WLS.updated > remote.updated) {
+      await pushNow();
+    }
+    setSyncStatus('☁ 已同步');
+  } catch (e) {
+    setSyncStatus('同步失敗：' + (e.message || e));
+  }
+}
+
+let pushTimer = null;
+function syncPush() {
+  if (!localStorage.getItem(TOK_KEY) || !localStorage.getItem(GIST_KEY)) return;
+  setSyncStatus('同步中…');
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(async () => {
+    try { await pushNow(); setSyncStatus('☁ 已同步'); }
+    catch (e) { setSyncStatus('同步失敗：' + (e.message || e)); }
+  }, 800);
+}
+async function pushNow() {
+  const r = await fetch('https://api.github.com/gists/' + localStorage.getItem(GIST_KEY), {
+    method: 'PATCH', headers: ghHeaders(),
+    body: JSON.stringify({ files: { 'watchlists.json': { content: JSON.stringify(WLS) } } }),
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+
+function setupSync() {
+  if (localStorage.getItem(TOK_KEY)) {
+    if (confirm('這台裝置已設定同步。要停用並移除本機儲存的 token 嗎？\n（雲端 Gist 上的名單不會被刪除）')) {
+      localStorage.removeItem(TOK_KEY);
+      localStorage.removeItem(GIST_KEY);
+      setSyncStatus('未設定同步（僅存於本機）');
+    }
+    return;
+  }
+  const tok = prompt(
+    '貼上 GitHub Personal Access Token（classic，只勾 gist 權限）。\n' +
+    '建立步驟：github.com 右上頭像 → Settings → Developer settings →\n' +
+    'Personal access tokens → Tokens (classic) → Generate new token (classic)\n' +
+    '→ 只勾選「gist」→ Generate，複製貼到這裡：');
+  if (!tok || !tok.trim()) return;
+  localStorage.setItem(TOK_KEY, tok.trim());
+  syncInit();
+}
+
+/* ---------- 載入 ---------- */
 fetch('data.json?t=' + Date.now())
   .then(r => r.json())
   .then(db => {
@@ -227,8 +370,8 @@ fetch('data.json?t=' + Date.now())
       f.textContent = '⚠ 以下標的本次抓取失敗：' + db.failed.join(', ');
     }
     renderIndex();
-    renderWatch();
     render();
+    syncInit();
   })
   .catch(e => { document.getElementById('meta').textContent = '載入 data.json 失敗：' + e; });
 </script>
