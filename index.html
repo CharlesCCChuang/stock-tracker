@@ -101,7 +101,7 @@ function pctClass(v) {
 function fmtPct(v) { return (v === 0 ? '0%' : v.toFixed(2) + '%'); }
 function fmtChg(v) { return (v > 0 ? '+' : '') + v.toFixed(2) + '%'; }
 function chgClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'p0'); }
-function tvLink(sym) { return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(sym); }
+function tvLink(sym) { return 'https://tw.tradingview.com/chart/?symbol=' + encodeURIComponent(sym); }
 
 function rowHtml(sym, tag) {
   const d = DB.data[sym];
