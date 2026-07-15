@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>美股回檔追蹤器</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d24; --muted: #6b7280;
+    --border: #e5e7eb; --head: #f0f2f5; --accent: #2563eb;
+    --ok: #9ca3af; --mild: #d97706; --deep: #dc2626; --severe: #991b1b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #171a21; --text: #e6e8ec; --muted: #9aa1ad;
+      --border: #2a2f3a; --head: #1e222b; --accent: #60a5fa;
+      --ok: #6b7280; --mild: #f59e0b; --deep: #f87171; --severe: #ef4444;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font: 15px/1.5 "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 4px 0 2px; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .toolbar button {
+    padding: 6px 14px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--card); color: var(--text); cursor: pointer; font-size: 14px;
+  }
+  .toolbar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+          margin-bottom: 16px; overflow: hidden; }
+  .card h2 { font-size: 16px; margin: 0; padding: 10px 14px; background: var(--head);
+             border-bottom: 1px solid var(--border); }
+  .tblwrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 12px; text-align: right; white-space: nowrap;
+           border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  th:first-child, td:first-child { text-align: left; }
+  tr:last-child td { border-bottom: none; }
+  tr.subhead td { text-align: left; font-size: 12.5px; font-weight: 700;
+                  color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--card));
+                  padding: 5px 12px; }
+  td.sym a { color: var(--text); font-weight: 700; text-decoration: none; }
+  td.sym a:hover { color: var(--accent); text-decoration: underline; }
+  td .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+  .p0 { color: var(--ok); }
+  .p1 { color: var(--mild); }
+  .p2 { color: var(--deep); font-weight: 600; }
+  .p3 { color: var(--severe); font-weight: 700; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 10px 2px 30px; }
+  .failed { color: var(--deep); font-size: 13px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📉 美股回檔追蹤器</h1>
+  <div class="meta" id="meta">載入中…</div>
+  <div class="failed" id="failed" hidden></div>
+  <div class="toolbar">
+    <button id="btnGroup" class="active">依類股分組</button>
+    <button id="btnSort">依回檔深度排序</button>
+  </div>
+  <div id="content"></div>
+  <div class="note">
+    「最大跌幅」＝本段連續下跌中，段內高點到段內最低點（影線）的跌幅；「目前回檔」＝最新收盤價相對段內高點的跌幅。
+    反彈超過（高點＋低點）÷2 即視為該段結束並重新起算。資料來源：Yahoo Finance 日線（還原股價），每個交易日盤後自動更新。
+  </div>
+</div>
+<script>
+let DB = null, mode = 'group';
+
+function pctClass(v) {
+  if (v === null || v === undefined) return 'p0';
+  const a = Math.abs(v);
+  if (a < 5) return 'p0';
+  if (a < 15) return 'p1';
+  if (a < 30) return 'p2';
+  return 'p3';
+}
+function fmtPct(v) { return (v === 0 ? '0%' : v.toFixed(2) + '%'); }
+function tvLink(sym) { return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(sym); }
+
+function rowHtml(sym) {
+  const d = DB.data[sym];
+  if (!d) return `<tr><td class="sym">${sym}</td><td colspan="5" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
+  return `<tr>
+    <td class="sym"><a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a></td>
+    <td>${d.price.toFixed(2)}</td>
+    <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
+    <td class="${pctClass(d.cur)}">${fmtPct(d.cur)}</td>
+    <td>${d.peak.toFixed(2)}<span class="sub">${d.peak_date}</span></td>
+    <td>${d.low.toFixed(2)}<span class="sub">${d.low_date}</span></td>
+  </tr>`;
+}
+
+const THEAD = `<thead><tr>
+  <th>代號</th><th>收盤價</th><th>最大跌幅</th><th>目前回檔</th><th>波段高點</th><th>波段低點</th>
+</tr></thead>`;
+
+function renderGroups() {
+  let html = '';
+  for (const g of DB.groups) {
+    let body = '';
+    for (const s of g.subs) {
+      body += `<tr class="subhead"><td colspan="6">${s.name}</td></tr>`;
+      for (const sym of s.tickers) body += rowHtml(sym);
+    }
+    html += `<div class="card"><h2>${g.name}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
+  }
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderSorted() {
+  const syms = Object.keys(DB.data).sort((a, b) => DB.data[a].cur - DB.data[b].cur);
+  let body = '';
+  for (const sym of syms) body += rowHtml(sym);
+  document.getElementById('content').innerHTML =
+    `<div class="card"><h2>全部標的（目前回檔由深至淺）</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
+}
+
+function render() { mode === 'group' ? renderGroups() : renderSorted(); }
+
+document.getElementById('btnGroup').onclick = () => {
+  mode = 'group';
+  btnGroup.classList.add('active'); btnSort.classList.remove('active');
+  render();
+};
+document.getElementById('btnSort').onclick = () => {
+  mode = 'sort';
+  btnSort.classList.add('active'); btnGroup.classList.remove('active');
+  render();
+};
+
+fetch('data.json?t=' + Date.now())
+  .then(r => r.json())
+  .then(db => {
+    DB = db;
+    const dt = new Date(db.updated);
+    const taipei = dt.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+    const n = Object.keys(db.data).length;
+    document.getElementById('meta').textContent =
+      `資料更新時間：${taipei}（台北）｜追蹤 ${n} 檔｜資料日期：${db.data[Object.keys(db.data)[0]]?.date || '-'}`;
+    if (db.failed && db.failed.length) {
+      const f = document.getElementById('failed');
+      f.hidden = false;
+      f.textContent = '⚠ 以下標的本次抓取失敗：' + db.failed.join(', ');
+    }
+    render();
+  })
+  .catch(e => { document.getElementById('meta').textContent = '載入 data.json 失敗：' + e; });
+</script>
+</body>
+</html>

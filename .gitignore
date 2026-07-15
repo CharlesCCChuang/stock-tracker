@@ -1,0 +1,17 @@
+# 金鑰與機密 — 絕對不進版本庫
+.env
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node（Phase 1 之後）
+node_modules/
+.next/
+
+# 資料庫與暫存
+*.sqlite
+*.db
+data/
