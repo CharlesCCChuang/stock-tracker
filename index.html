@@ -118,15 +118,21 @@ function rowHtml(sym, tag) {
     <td>${d.price.toFixed(2)}</td>
     <td class="${chgClass(d.chg)}">${fmtChg(d.chg)}</td>
     <td class="${pctClass(d.cur)}">${fmtPct(d.cur)}</td>
-    <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
+    <td>${fmtDays(d)}</td>
     <td>${d.peak.toFixed(2)}<span class="sub">${d.peak_date}</span></td>
     <td>${d.low.toFixed(2)}<span class="sub">${d.low_date}</span></td>
-    <td>${d.days} 天</td>
+    <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
   </tr>`;
 }
 
+function fmtDays(d) {
+  // 回檔第 1 天且回檔幅度小於 10% → 視為尚未形成回檔，顯示橫線
+  if (d.days === 1 && Math.abs(d.cur) < 10) return '－';
+  return d.days + ' 天';
+}
+
 const THEAD = `<thead><tr>
-  <th>代號</th><th>收盤價</th><th>今日漲跌</th><th>目前回檔</th><th>最大跌幅</th><th>波段高點</th><th>波段低點</th><th>回檔天數</th>
+  <th>代號</th><th>收盤價</th><th>今日漲跌</th><th>目前回檔</th><th>回檔天數</th><th>波段高點</th><th>波段低點</th><th>最大跌幅</th>
 </tr></thead>`;
 
 function sortByCur(tickers) {
