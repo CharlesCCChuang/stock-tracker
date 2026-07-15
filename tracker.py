@@ -103,25 +103,28 @@ def compute_drawdown(bars):
         return None
     peak = bars[0]["high"]
     peak_date = bars[0]["date"]
+    peak_idx = 0
     seg_low = bars[0]["low"]
     low_date = bars[0]["date"]
 
-    for b in bars[1:]:
+    for i, b in enumerate(bars[1:], start=1):
         if b["high"] >= peak:
             # 創段內新高：高點上移，段內低點重設
-            peak, peak_date = b["high"], b["date"]
+            peak, peak_date, peak_idx = b["high"], b["date"], i
             seg_low, low_date = b["low"], b["date"]
             continue
         mid = (peak + seg_low) / 2.0
         if seg_low < peak and b["high"] >= mid:
             # 反彈成立（盤中碰到中點就算）：本段結束，從反彈高點重新起算
-            peak, peak_date = b["high"], b["date"]
+            peak, peak_date, peak_idx = b["high"], b["date"], i
             seg_low, low_date = b["low"], b["date"]
             continue
         if b["low"] < seg_low:
             seg_low, low_date = b["low"], b["date"]
 
     last = bars[-1]
+    # 回檔天數＝交易日數（高點當天算第 1 天，數到最新資料日）
+    days = len(bars) - peak_idx
     maxdd = (seg_low - peak) / peak * 100.0
     cur = min((last["close"] - peak) / peak * 100.0, 0.0)
     chg = ((last["close"] - bars[-2]["close"]) / bars[-2]["close"] * 100.0
@@ -136,6 +139,7 @@ def compute_drawdown(bars):
         "low_date": low_date,
         "maxdd": round(maxdd, 2),
         "cur": round(cur, 2),
+        "days": days,
     }
 
 

@@ -121,14 +121,8 @@ function rowHtml(sym, tag) {
     <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
     <td>${d.peak.toFixed(2)}<span class="sub">${d.peak_date}</span></td>
     <td>${d.low.toFixed(2)}<span class="sub">${d.low_date}</span></td>
-    <td>${ddDays(d)} 天</td>
+    <td>${d.days} 天</td>
   </tr>`;
-}
-
-function ddDays(d) {
-  // 波段高點當天算第 1 天，數到最新資料日
-  const ms = new Date(d.date) - new Date(d.peak_date);
-  return Math.round(ms / 86400000) + 1;
 }
 
 const THEAD = `<thead><tr>
