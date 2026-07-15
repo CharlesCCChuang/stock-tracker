@@ -8,13 +8,15 @@
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1a1d24; --muted: #6b7280;
     --border: #e5e7eb; --head: #f0f2f5; --accent: #2563eb;
-    --ok: #9ca3af; --mild: #d97706; --deep: #dc2626; --severe: #991b1b;
+    --ok: #9ca3af; --mild: #d97706; --deep: #dc2626; --severe: #7f1d1d;
+    --gain: #16a34a; --loss: #dc2626;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #0f1115; --card: #171a21; --text: #e6e8ec; --muted: #9aa1ad;
       --border: #2a2f3a; --head: #1e222b; --accent: #60a5fa;
-      --ok: #6b7280; --mild: #f59e0b; --deep: #f87171; --severe: #ef4444;
+      --ok: #6b7280; --mild: #f59e0b; --deep: #f87171; --severe: #dc2626;
+      --gain: #4ade80; --loss: #f87171;
     }
   }
   * { box-sizing: border-box; }
@@ -50,6 +52,8 @@
   .p1 { color: var(--mild); }
   .p2 { color: var(--deep); font-weight: 600; }
   .p3 { color: var(--severe); font-weight: 700; }
+  .up { color: var(--gain); }
+  .down { color: var(--loss); }
   .note { color: var(--muted); font-size: 12.5px; margin: 10px 2px 30px; }
   .failed { color: var(--deep); font-size: 13px; margin-bottom: 12px; }
 </style>
@@ -60,8 +64,8 @@
   <div class="meta" id="meta">載入中…</div>
   <div class="failed" id="failed" hidden></div>
   <div class="toolbar">
-    <button id="btnGroup" class="active">依類股分組</button>
-    <button id="btnSort">依回檔深度排序</button>
+    <button id="btnDepth" class="active">依回檔深度（預設）</button>
+    <button id="btnSubcat">依子分類檢視</button>
   </div>
   <div id="content"></div>
   <div class="note">
@@ -70,42 +74,65 @@
   </div>
 </div>
 <script>
-let DB = null, mode = 'group';
+let DB = null, mode = 'depth';
 
 function pctClass(v) {
   if (v === null || v === undefined) return 'p0';
   const a = Math.abs(v);
-  if (a < 5) return 'p0';
-  if (a < 15) return 'p1';
-  if (a < 30) return 'p2';
+  if (a < 15) return 'p0';
+  if (a < 30) return 'p1';
+  if (a < 40) return 'p2';
   return 'p3';
 }
 function fmtPct(v) { return (v === 0 ? '0%' : v.toFixed(2) + '%'); }
+function fmtChg(v) { return (v > 0 ? '+' : '') + v.toFixed(2) + '%'; }
+function chgClass(v) { return v > 0 ? 'up' : (v < 0 ? 'down' : 'p0'); }
 function tvLink(sym) { return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(sym); }
 
-function rowHtml(sym) {
+function rowHtml(sym, tag) {
   const d = DB.data[sym];
-  if (!d) return `<tr><td class="sym">${sym}</td><td colspan="5" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
+  const tagHtml = tag ? `<span class="sub">${tag}</span>` : '';
+  if (!d) return `<tr><td class="sym">${sym}${tagHtml}</td><td colspan="6" style="text-align:center;color:var(--muted)">無資料</td></tr>`;
   return `<tr>
-    <td class="sym"><a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a></td>
+    <td class="sym"><a href="${tvLink(sym)}" target="_blank" rel="noopener">${sym}</a>${tagHtml}</td>
     <td>${d.price.toFixed(2)}</td>
-    <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
+    <td class="${chgClass(d.chg)}">${fmtChg(d.chg)}</td>
     <td class="${pctClass(d.cur)}">${fmtPct(d.cur)}</td>
+    <td class="${pctClass(d.maxdd)}">${fmtPct(d.maxdd)}</td>
     <td>${d.peak.toFixed(2)}<span class="sub">${d.peak_date}</span></td>
     <td>${d.low.toFixed(2)}<span class="sub">${d.low_date}</span></td>
   </tr>`;
 }
 
 const THEAD = `<thead><tr>
-  <th>代號</th><th>收盤價</th><th>最大跌幅</th><th>目前回檔</th><th>波段高點</th><th>波段低點</th>
+  <th>代號</th><th>收盤價</th><th>今日漲跌</th><th>目前回檔</th><th>最大跌幅</th><th>波段高點</th><th>波段低點</th>
 </tr></thead>`;
 
-function renderGroups() {
+function renderDepth() {
+  // 每個類股內依「目前回檔」由深至淺排序，子分類以小標籤顯示
+  let html = '';
+  for (const g of DB.groups) {
+    const items = [];
+    for (const s of g.subs) for (const sym of s.tickers) items.push([sym, s.name]);
+    items.sort((a, b) => {
+      const da = DB.data[a[0]], db_ = DB.data[b[0]];
+      if (!da) return 1;
+      if (!db_) return -1;
+      return da.cur - db_.cur;
+    });
+    let body = '';
+    for (const [sym, tag] of items) body += rowHtml(sym, tag);
+    html += `<div class="card"><h2>${g.name}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
+  }
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderSubcat() {
   let html = '';
   for (const g of DB.groups) {
     let body = '';
     for (const s of g.subs) {
-      body += `<tr class="subhead"><td colspan="6">${s.name}</td></tr>`;
+      body += `<tr class="subhead"><td colspan="7">${s.name}</td></tr>`;
       for (const sym of s.tickers) body += rowHtml(sym);
     }
     html += `<div class="card"><h2>${g.name}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
@@ -113,24 +140,16 @@ function renderGroups() {
   document.getElementById('content').innerHTML = html;
 }
 
-function renderSorted() {
-  const syms = Object.keys(DB.data).sort((a, b) => DB.data[a].cur - DB.data[b].cur);
-  let body = '';
-  for (const sym of syms) body += rowHtml(sym);
-  document.getElementById('content').innerHTML =
-    `<div class="card"><h2>全部標的（目前回檔由深至淺）</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
-}
+function render() { mode === 'depth' ? renderDepth() : renderSubcat(); }
 
-function render() { mode === 'group' ? renderGroups() : renderSorted(); }
-
-document.getElementById('btnGroup').onclick = () => {
-  mode = 'group';
-  btnGroup.classList.add('active'); btnSort.classList.remove('active');
+document.getElementById('btnDepth').onclick = () => {
+  mode = 'depth';
+  btnDepth.classList.add('active'); btnSubcat.classList.remove('active');
   render();
 };
-document.getElementById('btnSort').onclick = () => {
-  mode = 'sort';
-  btnSort.classList.add('active'); btnGroup.classList.remove('active');
+document.getElementById('btnSubcat').onclick = () => {
+  mode = 'subcat';
+  btnSubcat.classList.add('active'); btnDepth.classList.remove('active');
   render();
 };
 

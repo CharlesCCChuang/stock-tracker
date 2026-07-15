@@ -119,8 +119,11 @@ def compute_drawdown(bars):
     last = bars[-1]
     maxdd = (seg_low - peak) / peak * 100.0
     cur = min((last["close"] - peak) / peak * 100.0, 0.0)
+    chg = ((last["close"] - bars[-2]["close"]) / bars[-2]["close"] * 100.0
+           if len(bars) >= 2 else 0.0)
     return {
         "price": round(last["close"], 2),
+        "chg": round(chg, 2),
         "date": last["date"],
         "peak": round(peak, 2),
         "peak_date": peak_date,
