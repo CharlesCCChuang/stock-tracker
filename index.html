@@ -65,6 +65,10 @@
   tr.subhead td { text-align: left; font-size: 12.5px; font-weight: 700;
                   color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--card));
                   padding: 5px 12px; }
+  tr.grouphead td { text-align: left; font-size: 14px; font-weight: 800;
+                    background: var(--head); padding: 8px 12px; }
+  .rename { cursor: pointer; margin-left: 8px; font-size: 13px; color: var(--muted); }
+  .rename:hover { color: var(--accent); }
   td.sym a { color: var(--text); font-weight: 700; text-decoration: none; }
   td.sym a:hover { color: var(--accent); text-decoration: underline; }
   .wtag { display: inline-block; width: 17px; height: 17px; line-height: 15px;
@@ -118,20 +122,36 @@ let DB = null;
 /* ---------- 自選名單（兩份，localStorage＋可選 Gist 雲端同步） ---------- */
 const LS_KEY = 'watchlists_v2';
 
+function normalizeWL(o) {
+  if (!o.names) o.names = {};
+  if (!o.names["1"]) o.names["1"] = '自選名單 1';
+  if (!o.names["2"]) o.names["2"] = '自選名單 2';
+  return o;
+}
+
 function loadWL() {
   try {
     const o = JSON.parse(localStorage.getItem(LS_KEY));
-    if (o && o.lists) return o;
+    if (o && o.lists) return normalizeWL(o);
   } catch (e) {}
   // 從舊版單一自選股遷移
   let old = [];
   try { old = JSON.parse(localStorage.getItem('watchlist') || '[]'); } catch (e) {}
-  return {
+  return normalizeWL({
     lists: { "1": old, "2": [] },
     updated: old.length ? new Date().toISOString() : '1970-01-01T00:00:00Z',
-  };
+  });
 }
 let WLS = loadWL();
+
+function renameList(l) {
+  const n = prompt('自選名單名稱：', WLS.names[l]);
+  if (n && n.trim()) {
+    WLS.names[l] = n.trim();
+    saveWL();
+    render();
+  }
+}
 
 function saveWL() {
   WLS.updated = new Date().toISOString();
@@ -224,30 +244,29 @@ function htmlAll() {
 function htmlList(l) {
   let body = '';
   for (const g of DB.groups) {
-    const items = [];
-    for (const s of g.subs) for (const sym of s.tickers) {
-      if (inList(l, sym)) items.push([sym, s.name]);
+    const subBlocks = [];
+    for (const s of g.subs) {
+      const members = s.tickers.filter(sym => inList(l, sym));
+      if (!members.length) continue;
+      let block = `<tr class="subhead"><td colspan="8">${s.name}</td></tr>`;
+      for (const sym of sortByCur(members)) block += rowHtml(sym);
+      subBlocks.push(block);
     }
-    if (!items.length) continue;
-    items.sort((a, b) => {
-      const da = DB.data[a[0]], db_ = DB.data[b[0]];
-      if (!da) return 1;
-      if (!db_) return -1;
-      return da.cur - db_.cur;
-    });
-    body += `<tr class="subhead"><td colspan="8">${g.name}</td></tr>`;
-    for (const [sym, tag] of items) body += rowHtml(sym, tag);
+    if (!subBlocks.length) continue;
+    body += `<tr class="grouphead"><td colspan="8">${g.name}</td></tr>` + subBlocks.join('');
   }
   const inner = body
     ? `<div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div>`
     : `<div class="hint">此名單還沒有股票——切到「全部股票」，點代號前的 ${l === '1' ? '①' : '②'} 圓鈕加入。</div>`;
-  return `<div class="card"><h2>⭐ 自選名單 ${l}</h2>${inner}</div>`;
+  return `<div class="card"><h2>⭐ ${WLS.names[l]}<span class="rename" title="重新命名" onclick="renameList('${l}')">✎ 重新命名</span></h2>${inner}</div>`;
 }
 
 function render() {
   for (const [id, v] of [['btnAll', 'all'], ['btn1', '1'], ['btn2', '2']]) {
     document.getElementById(id).classList.toggle('active', VIEW === v);
   }
+  document.getElementById('btn1').textContent = WLS.names["1"];
+  document.getElementById('btn2').textContent = WLS.names["2"];
   const content = document.getElementById('content');
   content.innerHTML = (VIEW === 'all') ? htmlAll() : htmlList(VIEW);
 }
@@ -305,7 +324,7 @@ async function syncInit() {
     const file = (await r.json()).files['watchlists.json'];
     const remote = file ? JSON.parse(file.content) : null;
     if (remote && remote.updated > WLS.updated) {
-      WLS = remote;
+      WLS = normalizeWL(remote);
       localStorage.setItem(LS_KEY, JSON.stringify(WLS));
       if (DB) render();
     } else if (!remote || WLS.updated > remote.updated) {
