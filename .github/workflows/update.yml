@@ -34,5 +34,7 @@ jobs:
             echo "no changes"
           else
             git commit -m "Update data $(date -u +%Y-%m-%d)"
+            # 期間若有其他 commit 推上 main，先 rebase 再推（data.json 衝突以本次新資料為準）
+            git pull --rebase -X theirs origin main
             git push
           fi
