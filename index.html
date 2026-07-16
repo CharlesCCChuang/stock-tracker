@@ -55,6 +55,7 @@
           box-shadow: 0 1px 4px rgba(90, 70, 30, .06); }
   .card h2 { font-size: 16px; margin: 0; padding: 10px 14px; background: var(--head);
              border-bottom: 1px solid var(--border); }
+  .breadth { font-size: 12px; font-weight: 400; margin-left: 10px; white-space: nowrap; }
   .tblwrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
   th, td { padding: 7px 12px; text-align: right; white-space: nowrap;
@@ -98,6 +99,7 @@
   <span class="idxprice" id="idxPrice"></span>
   <span class="idxchg" id="idxChg"></span>
   <span class="idxdate" id="idxDate"></span>
+  <span id="idxBreadth"></span>
 </div>
 <div class="wrap">
   <h1><span style="color:var(--accent)">◆</span> 美股回檔追蹤器</h1>
@@ -225,6 +227,17 @@ const THEAD = `<thead><tr>
   <th>代號</th><th>收盤價</th><th>今日漲跌</th><th>目前回檔</th><th>回檔天數</th><th>波段高點</th><th>波段低點</th><th>最大跌幅</th>
 </tr></thead>`;
 
+function breadthHtml(syms) {
+  // 上漲/下跌/平盤家數（依今日漲跌）
+  let up = 0, down = 0, flat = 0;
+  for (const sym of syms) {
+    const d = DB.data[sym];
+    if (!d) continue;
+    if (d.chg > 0) up++; else if (d.chg < 0) down++; else flat++;
+  }
+  return `<span class="breadth"><span class="up">上漲 ${up} 家</span>；<span class="down">下跌 ${down} 家</span>；<span class="p0">平盤 ${flat} 家</span></span>`;
+}
+
 function sortByCur(tickers) {
   return [...tickers].sort((a, b) => {
     const da = DB.data[a], db_ = DB.data[b];
@@ -238,11 +251,13 @@ function htmlAll() {
   let html = '';
   for (const g of DB.groups) {
     let body = '';
+    const groupSyms = [];
     for (const s of g.subs) {
-      body += `<tr class="subhead"><td colspan="8">${s.name}</td></tr>`;
+      groupSyms.push(...s.tickers);
+      body += `<tr class="subhead"><td colspan="8">${s.name}${breadthHtml(s.tickers)}</td></tr>`;
       for (const sym of sortByCur(s.tickers)) body += rowHtml(sym);
     }
-    html += `<div class="card"><h2>${g.name}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
+    html += `<div class="card"><h2>${g.name}${breadthHtml(groupSyms)}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
   }
   return html;
 }
@@ -251,15 +266,17 @@ function htmlList(l) {
   let body = '';
   for (const g of DB.groups) {
     const subBlocks = [];
+    const groupMembers = [];
     for (const s of g.subs) {
       const members = s.tickers.filter(sym => inList(l, sym));
       if (!members.length) continue;
-      let block = `<tr class="subhead"><td colspan="8">${s.name}</td></tr>`;
+      groupMembers.push(...members);
+      let block = `<tr class="subhead"><td colspan="8">${s.name}${breadthHtml(members)}</td></tr>`;
       for (const sym of sortByCur(members)) block += rowHtml(sym, null, l);
       subBlocks.push(block);
     }
     if (!subBlocks.length) continue;
-    body += `<tr class="grouphead"><td colspan="8">${g.name}</td></tr>` + subBlocks.join('');
+    body += `<tr class="grouphead"><td colspan="8">${g.name}${breadthHtml(groupMembers)}</td></tr>` + subBlocks.join('');
   }
   const inner = body
     ? `<div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div>`
@@ -286,6 +303,9 @@ function renderIndex() {
   chgEl.textContent = `${ix.chg_pts > 0 ? '+' : ''}${ix.chg_pts.toLocaleString('en-US')} (${ix.chg > 0 ? '+' : ''}${ix.chg.toFixed(2)}%)`;
   chgEl.className = 'idxchg ' + (ix.chg_pts > 0 ? 'up' : (ix.chg_pts < 0 ? 'down' : 'p0'));
   document.getElementById('idxDate').textContent = ix.date;
+  const allSyms = [];
+  for (const g of DB.groups) for (const s of g.subs) allSyms.push(...s.tickers);
+  document.getElementById('idxBreadth').innerHTML = breadthHtml(allSyms);
 }
 
 /* ---------- 跨裝置同步（GitHub 私密 Gist） ---------- */
