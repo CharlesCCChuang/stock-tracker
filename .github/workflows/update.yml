@@ -2,8 +2,11 @@ name: Update stock data
 
 on:
   schedule:
-    # 台北時間週二~週六 05:30（UTC 21:30，涵蓋美股週一~週五收盤後）
-    - cron: "30 21 * * 1-5"
+    # 台北時間週二~週六 05:47（UTC 21:47，涵蓋美股週一~週五收盤後）
+    # 刻意避開整點/半點：GitHub 在尖峰時段可能延遲或跳過排程
+    - cron: "47 21 * * 1-5"
+    # 備援：台北 07:23 再跑一次，第一次被跳過時補上（資料相同時不會重複 commit）
+    - cron: "23 23 * * 1-5"
   workflow_dispatch:
 
 permissions:
