@@ -110,6 +110,7 @@
     <button id="btnAll" onclick="setView('all')">全部股票</button>
     <button id="btn1" onclick="setView('1')">自選名單 1</button>
     <button id="btn2" onclick="setView('2')">自選名單 2</button>
+    <button id="btnMode" onclick="toggleTagMode()"></button>
     <button class="sync" onclick="setupSync()">☁ 同步設定</button>
     <span class="syncstatus" id="syncstatus"></span>
   </div>
@@ -180,6 +181,19 @@ function setView(v) {
   VIEW = v;
   localStorage.setItem('view', v);
   render();
+}
+
+/* ---------- 標籤歸類模式：single=每股只在最適標籤；multi=每個標籤都列出 ---------- */
+let TAGMODE = localStorage.getItem('tagmode') || 'single';
+function toggleTagMode() {
+  TAGMODE = TAGMODE === 'single' ? 'multi' : 'single';
+  localStorage.setItem('tagmode', TAGMODE);
+  render();
+}
+function subMembers(groupName, sub) {
+  return TAGMODE === 'single'
+    ? sub.tickers.filter(sym => DB.primary[sym] === groupName)
+    : sub.tickers;
 }
 
 /* ---------- 顯示 ---------- */
@@ -253,10 +267,13 @@ function htmlAll() {
     let body = '';
     const groupSyms = [];
     for (const s of g.subs) {
-      groupSyms.push(...s.tickers);
-      body += `<tr class="subhead"><td colspan="8">${s.name}${breadthHtml(s.tickers)}</td></tr>`;
-      for (const sym of sortByCur(s.tickers)) body += rowHtml(sym);
+      const members = subMembers(g.name, s);
+      if (!members.length) continue;
+      groupSyms.push(...members);
+      body += `<tr class="subhead"><td colspan="8">${s.name}${breadthHtml(members)}</td></tr>`;
+      for (const sym of sortByCur(members)) body += rowHtml(sym);
     }
+    if (!groupSyms.length) continue;
     html += `<div class="card"><h2>${g.name}${breadthHtml(groupSyms)}</h2><div class="tblwrap"><table>${THEAD}<tbody>${body}</tbody></table></div></div>`;
   }
   return html;
@@ -268,7 +285,7 @@ function htmlList(l) {
     const subBlocks = [];
     const groupMembers = [];
     for (const s of g.subs) {
-      const members = s.tickers.filter(sym => inList(l, sym));
+      const members = subMembers(g.name, s).filter(sym => inList(l, sym));
       if (!members.length) continue;
       groupMembers.push(...members);
       let block = `<tr class="subhead"><td colspan="8">${s.name}${breadthHtml(members)}</td></tr>`;
@@ -290,6 +307,8 @@ function render() {
   }
   document.getElementById('btn1').textContent = WLS.names["1"];
   document.getElementById('btn2').textContent = WLS.names["2"];
+  document.getElementById('btnMode').textContent =
+    TAGMODE === 'single' ? '模式：單一歸類' : '模式：標籤可重複';
   const content = document.getElementById('content');
   content.innerHTML = (VIEW === 'all') ? htmlAll() : htmlList(VIEW);
 }
@@ -303,9 +322,8 @@ function renderIndex() {
   chgEl.textContent = `${ix.chg_pts > 0 ? '+' : ''}${ix.chg_pts.toLocaleString('en-US')} (${ix.chg > 0 ? '+' : ''}${ix.chg.toFixed(2)}%)`;
   chgEl.className = 'idxchg ' + (ix.chg_pts > 0 ? 'up' : (ix.chg_pts < 0 ? 'down' : 'p0'));
   document.getElementById('idxDate').textContent = ix.date;
-  const allSyms = [];
-  for (const g of DB.groups) for (const s of g.subs) allSyms.push(...s.tickers);
-  document.getElementById('idxBreadth').innerHTML = breadthHtml(allSyms);
+  // 用去重後的全部標的計算，避免多標籤股票被重複計數
+  document.getElementById('idxBreadth').innerHTML = breadthHtml(Object.keys(DB.data));
 }
 
 /* ---------- 跨裝置同步（GitHub 私密 Gist） ---------- */

@@ -13,8 +13,23 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
+# 13 個類股標籤＝大類（同一支股票可掛多個標籤）；子分類為標籤內的細分
 GROUPS = [
-    {"name": "1. 半導體", "subs": [
+    {"name": "AI/ML", "subs": [
+        {"name": "AI晶片", "tickers": ["NVDA", "AMD", "AVGO", "QCOM", "MRVL"]},
+        {"name": "伺服器與算力雲", "tickers": ["SMCI", "DELL", "NBIS", "CRWV", "APLD", "ANET"]},
+        {"name": "AI軟體與平台", "tickers": ["GOOGL", "GOOG", "META", "PLTR", "CRWD", "NOW", "CRM"]},
+    ]},
+    {"name": "光通訊", "subs": [
+        {"name": "光通訊晶片與IP", "tickers": ["AVGO", "MRVL", "CRDO", "RMBS"]},
+        {"name": "光模組與設備", "tickers": ["AAOI", "CIEN"]},
+        {"name": "材料基板", "tickers": ["AXTI"]},
+    ]},
+    {"name": "加密/金融", "subs": [
+        {"name": "加密貨幣", "tickers": ["COIN", "MSTR", "HOOD"]},
+        {"name": "私募與另類資產", "tickers": ["BX", "ARES", "DXYZ"]},
+    ]},
+    {"name": "半導體", "subs": [
         {"name": "運算晶片", "tickers": ["NVDA", "AMD", "INTC"]},
         {"name": "網通與連接晶片", "tickers": ["AVGO", "QCOM", "MRVL", "CRDO", "RMBS"]},
         {"name": "功率與車用", "tickers": ["ON"]},
@@ -22,44 +37,86 @@ GROUPS = [
         {"name": "記憶體", "tickers": ["MU"]},
         {"name": "EDA", "tickers": ["CDNS", "SNPS"]},
     ]},
-    {"name": "2. 資料中心與AI基建", "subs": [
-        {"name": "伺服器與算力雲", "tickers": ["SMCI", "DELL", "CRWV", "APLD", "NBIS"]},
-        {"name": "電力與散熱", "tickers": ["VRT", "ETN", "FIX"]},
-        {"name": "網通與光通訊", "tickers": ["ANET", "CIEN", "AAOI"]},
-    ]},
-    {"name": "3. 軟體、雲端與資安", "subs": [
-        {"name": "資安", "tickers": ["PANW", "CRWD", "ZS"]},
-        {"name": "企業SaaS", "tickers": ["NOW", "CRM", "ORCL", "HUBS", "DDOG"]},
-        {"name": "AI數據", "tickers": ["PLTR"]},
-    ]},
-    {"name": "4. 科技巨頭與網路", "subs": [
-        {"name": "科技巨頭", "tickers": ["GOOGL", "GOOG", "AAPL", "META", "NFLX", "BABA"]},
-    ]},
-    {"name": "5. 醫藥與生技", "subs": [
-        {"name": "基因編輯與細胞治療", "tickers": ["CRSP", "EDIT", "NTLA", "BEAM", "ALLO", "IBRX"]},
-        {"name": "減重與代謝", "tickers": ["LLY", "NVO", "VKTX", "RYTM"]},
-        {"name": "其他製藥", "tickers": ["VRTX", "ARQT"]},
-    ]},
-    {"name": "6. 能源與電網", "subs": [
-        {"name": "核能與鈾", "tickers": ["OKLO", "SMR", "CCJ", "LEU"]},
-        {"name": "發電與電網工程", "tickers": ["GEV", "PWR", "BEPC"]},
-    ]},
-    {"name": "7. AI實體機器人", "subs": [
-        {"name": "實體AI與感測", "tickers": ["TSLA", "SERV", "AEVA"]},
-    ]},
-    {"name": "8. 航太與國防", "subs": [
-        {"name": "太空與衛星", "tickers": ["RKLB", "ASTS"]},
+    {"name": "國防", "subs": [
         {"name": "軍工與國防IT", "tickers": ["NOC", "CACI"]},
     ]},
-    {"name": "9. 金融、私募與加密", "subs": [
-        {"name": "加密相關", "tickers": ["COIN", "MSTR", "HOOD"]},
-        {"name": "私募與另類資產", "tickers": ["BX", "ARES", "DXYZ"]},
+    {"name": "基因編輯", "subs": [
+        {"name": "基因編輯", "tickers": ["CRSP", "EDIT", "NTLA", "BEAM"]},
+        {"name": "細胞治療", "tickers": ["ALLO"]},
     ]},
-    {"name": "10. 工業、水資源與原物料", "subs": [
+    {"name": "太空", "subs": [
+        {"name": "發射與衛星", "tickers": ["RKLB", "ASTS"]},
+        {"name": "感測", "tickers": ["AEVA"]},
+    ]},
+    {"name": "核能", "subs": [
+        {"name": "反應爐與SMR", "tickers": ["OKLO", "SMR"]},
+        {"name": "鈾與核燃料", "tickers": ["CCJ", "LEU"]},
+        {"name": "綜合電力", "tickers": ["BEPC"]},
+    ]},
+    {"name": "機器人", "subs": [
+        {"name": "自駕與實體AI", "tickers": ["TSLA"]},
+        {"name": "配送機器人", "tickers": ["SERV"]},
+        {"name": "感測", "tickers": ["AEVA"]},
+    ]},
+    {"name": "生技/製藥", "subs": [
+        {"name": "減重與代謝", "tickers": ["LLY", "NVO", "VKTX", "RYTM"]},
+        {"name": "基因編輯與細胞治療", "tickers": ["CRSP", "EDIT", "NTLA", "BEAM", "ALLO"]},
+        {"name": "免疫與其他製藥", "tickers": ["IBRX", "VRTX", "ARQT"]},
+    ]},
+    {"name": "網路安全", "subs": [
+        {"name": "資安", "tickers": ["PANW", "CRWD", "ZS"]},
+    ]},
+    {"name": "能源/電力", "subs": [
+        {"name": "電力設備與散熱", "tickers": ["VRT", "ETN", "FIX"]},
+        {"name": "發電與電網工程", "tickers": ["GEV", "PWR", "BEPC"]},
         {"name": "水資源", "tickers": ["XYL", "PNR"]},
-        {"name": "稀土", "tickers": ["MP"]},
+        {"name": "稀土材料", "tickers": ["MP"]},
+        {"name": "電動車", "tickers": ["TSLA"]},
+    ]},
+    {"name": "雲端/SaaS", "subs": [
+        {"name": "企業SaaS", "tickers": ["NOW", "CRM", "ORCL", "HUBS", "DDOG", "PLTR"]},
+        {"name": "消費網路與平台", "tickers": ["GOOGL", "GOOG", "META", "AAPL", "NFLX", "BABA"]},
+        {"name": "雲端基礎設施", "tickers": ["ANET", "NBIS", "CRWV"]},
     ]},
 ]
+
+# 單一歸類模式：多標籤股票的「最適標籤」
+PRIMARY = {
+    # 半導體
+    "NVDA": "半導體", "AMD": "半導體", "AVGO": "半導體", "QCOM": "半導體",
+    "MRVL": "半導體", "RMBS": "半導體", "INTC": "半導體", "ON": "半導體",
+    "TSM": "半導體", "ASML": "半導體", "MU": "半導體", "CDNS": "半導體", "SNPS": "半導體",
+    # 光通訊
+    "CRDO": "光通訊", "AXTI": "光通訊", "AAOI": "光通訊", "CIEN": "光通訊",
+    # AI/ML
+    "SMCI": "AI/ML", "DELL": "AI/ML", "NBIS": "AI/ML", "CRWV": "AI/ML",
+    "APLD": "AI/ML", "ANET": "AI/ML", "PLTR": "AI/ML", "META": "AI/ML",
+    "GOOGL": "AI/ML", "GOOG": "AI/ML",
+    # 雲端/SaaS
+    "NOW": "雲端/SaaS", "CRM": "雲端/SaaS", "ORCL": "雲端/SaaS", "HUBS": "雲端/SaaS",
+    "DDOG": "雲端/SaaS", "AAPL": "雲端/SaaS", "NFLX": "雲端/SaaS", "BABA": "雲端/SaaS",
+    # 網路安全
+    "PANW": "網路安全", "CRWD": "網路安全", "ZS": "網路安全",
+    # 基因編輯
+    "CRSP": "基因編輯", "EDIT": "基因編輯", "NTLA": "基因編輯", "BEAM": "基因編輯", "ALLO": "基因編輯",
+    # 生技/製藥
+    "LLY": "生技/製藥", "NVO": "生技/製藥", "VKTX": "生技/製藥", "RYTM": "生技/製藥",
+    "IBRX": "生技/製藥", "VRTX": "生技/製藥", "ARQT": "生技/製藥",
+    # 核能
+    "OKLO": "核能", "SMR": "核能", "CCJ": "核能", "LEU": "核能",
+    # 能源/電力
+    "VRT": "能源/電力", "ETN": "能源/電力", "FIX": "能源/電力", "GEV": "能源/電力",
+    "PWR": "能源/電力", "BEPC": "能源/電力", "XYL": "能源/電力", "PNR": "能源/電力", "MP": "能源/電力",
+    # 機器人
+    "TSLA": "機器人", "SERV": "機器人", "AEVA": "機器人",
+    # 太空
+    "RKLB": "太空", "ASTS": "太空",
+    # 國防
+    "NOC": "國防", "CACI": "國防",
+    # 加密/金融
+    "COIN": "加密/金融", "MSTR": "加密/金融", "HOOD": "加密/金融",
+    "BX": "加密/金融", "ARES": "加密/金融", "DXYZ": "加密/金融",
+}
 
 def fetch_daily(symbol: str):
     """從 Yahoo Finance 抓兩年日線 OHLC，回傳 [{date, high, low, close}, ...] 由舊到新。
@@ -144,7 +201,9 @@ def compute_drawdown(bars):
 
 
 def main():
-    all_tickers = [t for g in GROUPS for s in g["subs"] for t in s["tickers"]]
+    # 同一支股票可能出現在多個標籤，去重後抓資料
+    all_tickers = list(dict.fromkeys(
+        t for g in GROUPS for s in g["subs"] for t in s["tickers"]))
     result, failed = {}, []
     for i, sym in enumerate(all_tickers):
         for attempt in range(3):
@@ -186,6 +245,7 @@ def main():
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "index": index_info,
         "groups": GROUPS,
+        "primary": PRIMARY,
         "data": result,
         "failed": failed,
     }
