@@ -16,9 +16,10 @@ from datetime import datetime, timezone
 # 13 個類股標籤＝大類（同一支股票可掛多個標籤）；子分類為標籤內的細分
 GROUPS = [
     {"name": "AI/ML", "subs": [
-        {"name": "AI晶片", "tickers": ["NVDA", "AMD", "AVGO", "QCOM", "MRVL"]},
+        {"name": "AI晶片", "tickers": ["NVDA", "AMD", "AVGO", "QCOM", "MRVL", "ALAB"]},
         {"name": "伺服器與算力雲", "tickers": ["SMCI", "DELL", "NBIS", "CRWV", "APLD", "ANET"]},
         {"name": "AI軟體與平台", "tickers": ["GOOGL", "GOOG", "META", "PLTR", "CRWD", "NOW", "CRM"]},
+        {"name": "量子運算", "tickers": ["HQ"]},
     ]},
     {"name": "光通訊", "subs": [
         {"name": "光通訊晶片與IP", "tickers": ["AVGO", "MRVL", "CRDO", "RMBS"]},
@@ -31,7 +32,7 @@ GROUPS = [
     ]},
     {"name": "半導體", "subs": [
         {"name": "運算晶片", "tickers": ["NVDA", "AMD", "INTC"]},
-        {"name": "網通與連接晶片", "tickers": ["AVGO", "QCOM", "MRVL", "CRDO", "RMBS"]},
+        {"name": "網通與連接晶片", "tickers": ["AVGO", "QCOM", "MRVL", "CRDO", "RMBS", "ALAB"]},
         {"name": "功率與車用", "tickers": ["ON"]},
         {"name": "代工、設備與材料", "tickers": ["TSM", "ASML", "AXTI"]},
         {"name": "記憶體", "tickers": ["MU"]},
@@ -62,6 +63,7 @@ GROUPS = [
         {"name": "減重與代謝", "tickers": ["LLY", "NVO", "VKTX", "RYTM"]},
         {"name": "基因編輯與細胞治療", "tickers": ["CRSP", "EDIT", "NTLA", "BEAM", "ALLO"]},
         {"name": "免疫與其他製藥", "tickers": ["IBRX", "VRTX", "ARQT"]},
+        {"name": "AI新藥研發", "tickers": ["RXRX"]},
     ]},
     {"name": "網路安全", "subs": [
         {"name": "資安", "tickers": ["PANW", "CRWD", "ZS"]},
@@ -72,10 +74,11 @@ GROUPS = [
         {"name": "水資源", "tickers": ["XYL", "PNR"]},
         {"name": "稀土材料", "tickers": ["MP"]},
         {"name": "電動車", "tickers": ["TSLA"]},
+        {"name": "燃料電池與潔淨能源", "tickers": ["BE"]},
     ]},
     {"name": "雲端/SaaS", "subs": [
         {"name": "企業SaaS", "tickers": ["NOW", "CRM", "ORCL", "HUBS", "DDOG", "PLTR"]},
-        {"name": "消費網路與平台", "tickers": ["GOOGL", "GOOG", "META", "AAPL", "NFLX", "BABA"]},
+        {"name": "消費網路與平台", "tickers": ["GOOGL", "GOOG", "META", "AAPL", "NFLX", "BABA", "RBLX"]},
         {"name": "雲端基礎設施", "tickers": ["ANET", "NBIS", "CRWV"]},
     ]},
 ]
@@ -116,6 +119,12 @@ PRIMARY = {
     # 加密/金融
     "COIN": "加密/金融", "MSTR": "加密/金融", "HOOD": "加密/金融",
     "BX": "加密/金融", "ARES": "加密/金融", "DXYZ": "加密/金融",
+    # 新增（2026-08）
+    "ALAB": "半導體",       # Astera Labs：AI 連接晶片，另掛 AI/ML
+    "HQ": "AI/ML",          # Horizon Quantum：量子運算
+    "RXRX": "生技/製藥",    # Recursion：AI 新藥研發
+    "BE": "能源/電力",      # Bloom Energy：燃料電池
+    "RBLX": "雲端/SaaS",    # Roblox：遊戲平台
 }
 
 def fetch_daily(symbol: str):
