@@ -64,6 +64,7 @@ GROUPS = [
         {"name": "基因編輯與細胞治療", "tickers": ["CRSP", "EDIT", "NTLA", "BEAM", "ALLO"]},
         {"name": "免疫與其他製藥", "tickers": ["IBRX", "VRTX", "ARQT"]},
         {"name": "AI新藥研發", "tickers": ["RXRX"]},
+        {"name": "醫療器材與診斷", "tickers": ["SENS"]},
     ]},
     {"name": "網路安全", "subs": [
         {"name": "資安", "tickers": ["PANW", "CRWD", "ZS"]},
@@ -125,6 +126,7 @@ PRIMARY = {
     "RXRX": "生技/製藥",    # Recursion：AI 新藥研發
     "BE": "能源/電力",      # Bloom Energy：燃料電池
     "RBLX": "雲端/SaaS",    # Roblox：遊戲平台
+    "SENS": "生技/製藥",    # Senseonics：連續血糖監測醫材
 }
 
 def fetch_daily(symbol: str):
